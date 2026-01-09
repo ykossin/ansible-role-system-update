@@ -1,0 +1,60 @@
+---
+# Проверка целостности пакетов после обновления
+
+- name: Проверка целостности пакетов после обновления
+  ansible.builtin.command:
+    cmd: dpkg --audit
+  register: dpkg_audit
+  changed_when: false
+  failed_when: false
+  when:
+    - system_update_enabled
+    - system_check_package_integrity
+  tags:
+    - update
+    - system
+    - check
+    - integrity
+
+- name: Предупреждение о проблемах с пакетами
+  debug:
+    msg: "⚠️ Обнаружены проблемы с пакетами: {{ dpkg_audit.stdout }}"
+  when:
+    - system_update_enabled
+    - system_check_package_integrity
+    - dpkg_audit.rc != 0
+    - dpkg_audit.stdout | length > 0
+  tags:
+    - update
+    - system
+    - check
+    - integrity
+
+- name: Проверка зависимостей apt
+  ansible.builtin.command:
+    cmd: apt-get check
+  register: apt_check
+  changed_when: false
+  failed_when: false
+  when:
+    - system_update_enabled
+    - system_check_package_integrity
+  tags:
+    - update
+    - system
+    - check
+    - integrity
+
+- name: Предупреждение о проблемах с зависимостями
+  debug:
+    msg: "⚠️ Обнаружены проблемы с зависимостями: {{ apt_check.stderr }}"
+  when:
+    - system_update_enabled
+    - system_check_package_integrity
+    - apt_check.rc != 0
+    - apt_check.stderr | length > 0
+  tags:
+    - update
+    - system
+    - check
+    - integrity

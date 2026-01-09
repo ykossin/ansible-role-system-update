@@ -1,0 +1,73 @@
+---
+# Перезагрузка системы после обновления ядра
+
+- name: Проверка обновления ядра
+  stat:
+    path: /var/run/reboot-required
+  register: reboot_required_file
+  tags:
+    - update
+    - system
+    - check
+
+- name: Проверка обновления ядра через файл
+  stat:
+    path: /var/run/reboot-required.pkgs
+  register: reboot_required_packages
+  tags:
+    - update
+    - system
+    - check
+
+- name: Отображение информации о необходимости перезагрузки
+  debug:
+    msg:
+      - "Требуется перезагрузка: {{ reboot_required_file.stat.exists }}"
+      - "Пакеты, требующие перезагрузки: {{ reboot_required_packages.stat.exists }}"
+      - "Файл: {{ reboot_required_file.stat.path }}"
+  when:
+    - reboot_required_file.stat.exists
+    - system_reboot_after_kernel_update
+  tags:
+    - update
+    - system
+    - reboot
+
+- name: Отображение списка пакетов, требующих перезагрузки
+  slurp:
+    src: /var/run/reboot-required.pkgs
+  register: reboot_packages_content
+  when:
+    - reboot_required_packages.stat.exists
+    - system_reboot_after_kernel_update
+  tags:
+    - update
+    - system
+    - reboot
+
+- name: Вывод списка пакетов для перезагрузки
+  debug:
+    msg: "Пакеты, требующие перезагрузки: {{ reboot_packages_content.content | b64decode | split('\n') }}"
+  when:
+    - reboot_packages_content.content is defined
+    - system_reboot_after_kernel_update
+  tags:
+    - update
+    - system
+    - reboot
+
+- name: Перезагрузка системы после обновления ядра
+  reboot:
+    msg: "Перезагрузка после обновления системы (ядра)"
+    reboot_timeout: "{{ system_reboot_timeout }}"
+    pre_reboot_delay: "{{ system_reboot_delay }}"
+    post_reboot_delay: 30
+    connect_timeout: 300
+  when:
+    - system_update_enabled
+    - system_reboot_after_kernel_update
+    - reboot_required_file.stat.exists
+  tags:
+    - update
+    - system
+    - reboot

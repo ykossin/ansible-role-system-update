@@ -1,0 +1,60 @@
+---
+# Автоматические обновления (unattended-upgrades)
+# ВАЖНО: Выполняется только если system_unattended_upgrades: true
+# По умолчанию ВЫКЛЮЧЕНО для безопасности
+
+- name: Установка и настройка unattended-upgrades
+  apt:
+    name: unattended-upgrades
+    state: present
+  when:
+    - system_update_enabled
+    - system_unattended_upgrades
+  tags:
+    - update
+    - system
+    - unattended
+
+- name: Установка источников обновлений для unattended-upgrades (Debian)
+  ansible.builtin.set_fact:
+    system_unattended_upgrades_origins:
+      - "origin=Debian,codename={{ ansible_facts.distribution_release }},label=Debian-Security"
+      - "origin=Debian,codename={{ ansible_facts.distribution_release }},label=Debian"
+  when:
+    - system_unattended_upgrades
+    - ansible_facts.distribution == "Debian"
+    - system_unattended_upgrades_origins | length == 0
+  tags:
+    - update
+    - system
+    - unattended
+
+- name: Установка источников обновлений для unattended-upgrades (Ubuntu)
+  ansible.builtin.set_fact:
+    system_unattended_upgrades_origins:
+      - "origin=Ubuntu,codename={{ ansible_facts.distribution_release }},label=Ubuntu"
+      - "origin=Ubuntu,codename={{ ansible_facts.distribution_release }},label=Ubuntu-Security"
+  when:
+    - system_unattended_upgrades
+    - ansible_facts.distribution == "Ubuntu"
+    - system_unattended_upgrades_origins | length == 0
+  tags:
+    - update
+    - system
+    - unattended
+
+- name: Настройка автоматических обновлений
+  template:
+    src: 50unattended-upgrades.j2
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart unattended-upgrades
+  when:
+    - system_update_enabled
+    - system_unattended_upgrades
+  tags:
+    - update
+    - system
+    - unattended

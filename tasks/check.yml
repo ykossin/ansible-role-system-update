@@ -1,0 +1,148 @@
+---
+# Предварительные проверки перед обновлением системы
+
+- name: Проверка версии дистрибутива
+  fail:
+    msg: "Неподдерживаемая версия {{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}. Требуется минимум {{ system_min_distribution_version }}"
+  when:
+    - system_check_distribution_version
+    - ansible_facts.distribution not in ['Debian', 'Ubuntu']
+  tags:
+    - update
+    - system
+    - check
+
+- name: Проверка минимальной версии дистрибутива (Debian)
+  fail:
+    msg: "Требуется минимум Debian {{ system_min_distribution_version }}, установлена {{ ansible_facts.distribution_version }}"
+  when:
+    - system_check_distribution_version
+    - ansible_facts.distribution == "Debian"
+    - ansible_facts.distribution_version | int < (system_min_distribution_version | int)
+  tags:
+    - update
+    - system
+    - check
+
+- name: Получение major версии Ubuntu
+  ansible.builtin.set_fact:
+    ubuntu_major_version: "{{ ansible_facts.distribution_version | split('.') | first | int }}"
+    min_ubuntu_major_version: "{{ system_min_distribution_version | split('.') | first | int }}"
+  when:
+    - system_check_distribution_version
+    - ansible_facts.distribution == "Ubuntu"
+
+- name: Проверка минимальной версии дистрибутива (Ubuntu)
+  fail:
+    msg: "Требуется минимум Ubuntu {{ system_min_distribution_version }}, установлена {{ ansible_facts.distribution_version }}"
+  when:
+    - system_check_distribution_version
+    - ansible_facts.distribution == "Ubuntu"
+    - ubuntu_major_version | int < min_ubuntu_major_version | int
+  tags:
+    - update
+    - system
+    - check
+
+- name: Получение информации о свободном месте на диске (GB)
+  ansible.builtin.command:
+    cmd: df -BG /
+  register: df_output
+  changed_when: false
+  when: system_update_enabled
+  tags:
+    - update
+    - system
+    - check
+
+- name: Извлечение свободного места из вывода df
+  ansible.builtin.set_fact:
+    free_space_gb: "{{ (df_output.stdout_lines[-1].split()[3] | replace('G', '') | int) }}"
+  when:
+    - system_update_enabled
+    - df_output is defined
+    - df_output.stdout_lines is defined
+    - df_output.stdout_lines | length > 0
+  tags:
+    - update
+    - system
+    - check
+
+- name: Проверка достаточности свободного места
+  fail:
+    msg: "Недостаточно свободного места на диске. Требуется минимум {{ system_min_free_space_gb }}GB, доступно {{ free_space_gb }}GB"
+  when:
+    - system_update_enabled
+    - free_space_gb is defined
+    - (free_space_gb | int) < (system_min_free_space_gb | int)
+  tags:
+    - update
+    - system
+    - check
+
+- name: Отображение информации о свободном месте
+  debug:
+    msg: "Свободно места на диске: {{ free_space_gb }}GB (требуется минимум {{ system_min_free_space_gb }}GB)"
+  when:
+    - system_show_upgrade_info
+    - free_space_gb is defined
+  tags:
+    - update
+    - system
+    - check
+
+- name: Проверка доступности основных репозиториев
+  ansible.builtin.uri:
+    url: "{{ item }}"
+    method: HEAD
+    status_code: [200, 301, 302, 403]
+    timeout: 10
+    validate_certs: false
+  loop:
+    - "http://deb.debian.org/debian/"
+    - "http://security.debian.org/"
+  register: repo_check
+  failed_when: false
+  changed_when: false
+  when:
+    - system_check_repositories
+    - ansible_facts.distribution == "Debian"
+  tags:
+    - update
+    - system
+    - check
+
+- name: Проверка доступности основных репозиториев (Ubuntu)
+  ansible.builtin.uri:
+    url: "{{ item }}"
+    method: HEAD
+    status_code: [200, 301, 302, 403]
+    timeout: 10
+    validate_certs: false
+  loop:
+    - "http://archive.ubuntu.com/ubuntu/"
+    - "http://security.ubuntu.com/ubuntu/"
+  register: repo_check_ubuntu
+  failed_when: false
+  changed_when: false
+  when:
+    - system_check_repositories
+    - ansible_facts.distribution == "Ubuntu"
+  tags:
+    - update
+    - system
+    - check
+
+- name: Предупреждение о недоступных репозиториях
+  ansible.builtin.debug:
+    msg: "⚠️ Репозиторий {{ item.item }} может быть недоступен (статус: {{ item.status }}, ошибка: {{ item.msg | default('N/A') }})"
+  loop: "{{ (repo_check.results | default([])) + (repo_check_ubuntu.results | default([])) }}"
+  when:
+    - system_check_repositories
+    - not item.skipped | default(false)
+    - item.status is defined
+    - item.status not in [200, 301, 302, 403]
+  tags:
+    - update
+    - system
+    - check

@@ -1,0 +1,66 @@
+---
+# Логирование результатов обновления
+
+- name: Создание директории для логов
+  file:
+    path: "{{ system_log_dir }}"
+    state: directory
+    mode: '0755'
+  when:
+    - system_log_updates
+    - system_log_dir is defined
+  tags:
+    - update
+    - system
+    - log
+
+- name: Сохранение списка обновленных пакетов
+  ansible.builtin.copy:
+    content: |
+      Дата обновления: {{ ansible_date_time.iso8601 }}
+      Хост: {{ ansible_facts.hostname }}
+      Дистрибутив: {{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}
+      
+      Обновленные пакеты:
+      {% if apt_upgrade is defined and apt_upgrade.changed %}
+      {% for package in apt_upgrade.changes | default({}) | dict2items %}
+      - {{ package.key }}: {{ package.value.from }} -> {{ package.value.to }}
+      {% endfor %}
+      {% else %}
+      Нет обновленных пакетов
+      {% endif %}
+      
+      {% if apt_dist_upgrade is defined and apt_dist_upgrade.changed %}
+      Выполнен dist-upgrade
+      {% endif %}
+      
+      {% if apt_security_upgrade is defined and apt_security_upgrade.changed %}
+      Выполнено обновление безопасности
+      {% endif %}
+    dest: "{{ system_log_dir }}/system-update-{{ ansible_date_time.epoch }}.log"
+    mode: '0644'
+  when:
+    - system_log_updates
+    - system_log_dir is defined
+    - system_update_enabled
+    # Создавать лог только если были реальные обновления
+    - (apt_upgrade is defined and apt_upgrade.changed) or
+      (apt_dist_upgrade is defined and apt_dist_upgrade.changed) or
+      (apt_security_upgrade is defined and apt_security_upgrade.changed)
+  changed_when: false
+  tags:
+    - update
+    - system
+    - log
+
+- name: Очистка кэша apt
+  apt:
+    autoclean: true
+    cache_valid_time: 0
+  when:
+    - system_update_enabled
+    - system_clean_apt_cache
+  tags:
+    - update
+    - system
+    - clean

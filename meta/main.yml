@@ -1,7 +1,7 @@
 ---
 galaxy_info:
-  author: y.kossin
-  role_name: system-update
+  author: ykossin
+  role_name: system_update
   namespace: ykossin
   description: Роль для обновления операционной системы Debian/Ubuntu
   license: ISC

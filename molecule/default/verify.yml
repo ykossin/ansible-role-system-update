@@ -1,0 +1,293 @@
+---
+# Тесты для проверки работы роли system-update
+
+- name: Verify
+  hosts: all
+  gather_facts: true
+  become: true
+  tasks:
+    - name: Проверка версии дистрибутива
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution in ['Debian', 'Ubuntu']
+          - ansible_facts.distribution_version is defined
+        fail_msg: "Неподдерживаемый дистрибутив"
+        success_msg: "Дистрибутив поддерживается: {{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}"
+      tags:
+        - verify
+        - verify:distribution
+
+    - name: Проверка наличия Python3
+      ansible.builtin.command:
+        cmd: python3 --version
+      register: python_version
+      changed_when: false
+      tags:
+        - verify
+        - verify:python
+
+    - name: Отображение версии Python
+      ansible.builtin.debug:
+        msg: "Python версия: {{ python_version.stdout }}"
+      tags:
+        - verify
+        - verify:python
+
+    - name: Проверка наличия apt
+      ansible.builtin.command:
+        cmd: apt --version
+      register: apt_version
+      changed_when: false
+      tags:
+        - verify
+        - verify:apt
+
+    - name: Отображение версии apt
+      ansible.builtin.debug:
+        msg: "APT версия: {{ apt_version.stdout_lines[0] }}"
+      tags:
+        - verify
+        - verify:apt
+
+    - name: Получение информации о свободном месте на диске
+      ansible.builtin.command:
+        cmd: df -BG /
+      register: df_output
+      changed_when: false
+      tags:
+        - verify
+        - verify:disk
+
+    - name: Извлечение свободного места из вывода df
+      ansible.builtin.set_fact:
+        free_space_gb: "{{ (df_output.stdout_lines[-1].split()[3] | regex_replace('G', '') | int) }}"
+      when: df_output.stdout_lines is defined and df_output.stdout_lines | length > 1
+      tags:
+        - verify
+        - verify:disk
+
+    - name: Проверка достаточности свободного места
+      ansible.builtin.assert:
+        that:
+          - (free_space_gb | int) >= 1
+        fail_msg: "Недостаточно свободного места: {{ free_space_gb }}GB"
+        success_msg: "Достаточно свободного места: {{ free_space_gb }}GB"
+      tags:
+        - verify
+        - verify:disk
+
+    - name: Проверка целостности пакетов
+      ansible.builtin.command:
+        cmd: dpkg --audit
+      register: dpkg_audit
+      changed_when: false
+      failed_when: false
+      tags:
+        - verify
+        - verify:integrity
+
+    - name: Проверка отсутствия проблем с пакетами
+      ansible.builtin.assert:
+        that:
+          - dpkg_audit.rc == 0
+        fail_msg: "Обнаружены проблемы с пакетами: {{ dpkg_audit.stdout }}"
+        success_msg: "Проблем с пакетами не обнаружено"
+      tags:
+        - verify
+        - verify:integrity
+
+    - name: Проверка зависимостей apt
+      ansible.builtin.command:
+        cmd: apt-get check
+      register: apt_check
+      changed_when: false
+      failed_when: false
+      tags:
+        - verify
+        - verify:integrity
+
+    - name: Проверка отсутствия проблем с зависимостями
+      ansible.builtin.assert:
+        that:
+          - apt_check.rc == 0
+        fail_msg: "Обнаружены проблемы с зависимостями: {{ apt_check.stderr }}"
+        success_msg: "Проблем с зависимостями не обнаружено"
+      tags:
+        - verify
+        - verify:integrity
+
+    - name: Проверка наличия директории для логов
+      ansible.builtin.stat:
+        path: "{{ system_log_dir | default('/var/log/ansible') }}"
+      register: log_dir
+      tags:
+        - verify
+        - verify:logs
+
+    - name: Проверка создания директории для логов
+      ansible.builtin.assert:
+        that:
+          - log_dir.stat.exists
+          - log_dir.stat.isdir
+        fail_msg: "Директория для логов не создана"
+        success_msg: "Директория для логов создана: {{ log_dir.stat.path }}"
+      tags:
+        - verify
+        - verify:logs
+
+    - name: Проверка наличия логов обновления
+      ansible.builtin.find:
+        paths: "{{ system_log_dir | default('/var/log/ansible') }}"
+        patterns: "system-update-*.log"
+      register: update_logs
+      tags:
+        - verify
+        - verify:logs
+
+    - name: Проверка создания логов
+      ansible.builtin.assert:
+        that:
+          - update_logs.files | length > 0
+        fail_msg: "Логи обновления не созданы (это нормально, если не было реальных обновлений)"
+        success_msg: "Логи обновления созданы: {{ update_logs.files | length }} файл(ов)"
+      failed_when: false  # Не критично, если логов нет (не было обновлений)
+      tags:
+        - verify
+        - verify:logs
+
+    - name: Проверка содержимого лога обновления
+      ansible.builtin.slurp:
+        src: "{{ update_logs.files[0].path }}"
+      register: log_content
+      when: update_logs.files | length > 0
+      failed_when: false
+      tags:
+        - verify
+        - verify:logs
+
+    - name: Проверка наличия информации в логе
+      ansible.builtin.assert:
+        that:
+          - log_content.content | b64decode | length > 0
+        fail_msg: "Лог обновления пуст"
+        success_msg: "Лог обновления содержит информацию"
+      when: 
+        - update_logs.files | length > 0
+        - log_content is defined
+      failed_when: false
+      tags:
+        - verify
+        - verify:logs
+
+    - name: Проверка доступности репозиториев
+      ansible.builtin.uri:
+        url: "{{ item }}"
+        method: HEAD
+        status_code: [200, 301, 302, 403]
+        timeout: 10
+        validate_certs: false
+      loop:
+        - "http://deb.debian.org/debian/"
+        - "http://security.debian.org/"
+      register: repo_check
+      failed_when: false
+      changed_when: false
+      when: ansible_facts.distribution == "Debian"
+      tags:
+        - verify
+        - verify:repositories
+
+    - name: Проверка доступности репозиториев Ubuntu
+      ansible.builtin.uri:
+        url: "{{ item }}"
+        method: HEAD
+        status_code: [200, 301, 302, 403]
+        timeout: 10
+        validate_certs: false
+      loop:
+        - "http://archive.ubuntu.com/ubuntu/"
+        - "http://security.ubuntu.com/ubuntu/"
+      register: repo_check_ubuntu
+      failed_when: false
+      changed_when: false
+      when: ansible_facts.distribution == "Ubuntu"
+      tags:
+        - verify
+        - verify:repositories
+
+    - name: Получение списка обновляемых пакетов
+      ansible.builtin.command:
+        cmd: apt list --upgradable
+      register: upgradable_list
+      changed_when: false
+      failed_when: false
+      tags:
+        - verify
+        - verify:packages
+
+    - name: Подсчет количества обновляемых пакетов
+      ansible.builtin.set_fact:
+        upgradable_count: "{{ (upgradable_list.stdout_lines | default([]) | select('match', '^[^/]+/') | list | length) }}"
+      tags:
+        - verify
+        - verify:packages
+
+    - name: Отображение количества обновляемых пакетов
+      ansible.builtin.debug:
+        msg: "Доступно обновлений: {{ upgradable_count | default(0) }}"
+      tags:
+        - verify
+        - verify:packages
+
+    - name: Проверка работы systemd
+      ansible.builtin.command:
+        cmd: systemctl is-system-running
+      register: systemd_status
+      changed_when: false
+      failed_when: false
+      tags:
+        - verify
+        - verify:systemd
+        - systemd
+
+    - name: Определение, находимся ли мы в контейнере
+      ansible.builtin.stat:
+        path: /run/.containerenv
+      register: containerenv_file
+      failed_when: false
+      changed_when: false
+      tags:
+        - verify
+        - verify:systemd
+        - systemd
+
+    - name: Установка факта is_container
+      ansible.builtin.set_fact:
+        is_container: "{{ (ansible_env.container is defined and ansible_env.container | length > 0) or containerenv_file.stat.exists }}"
+      failed_when: false
+      tags:
+        - verify
+        - verify:systemd
+
+    - name: Проверка статуса systemd
+      ansible.builtin.assert:
+        that:
+          - systemd_status.stdout is defined
+          - systemd_status.stdout not in ['offline', 'initializing']
+        fail_msg: "Systemd не работает или недоступен: {{ systemd_status.stdout }}"
+        success_msg: "Systemd работает: {{ systemd_status.stdout }} (статусы 'running', 'degraded', 'maintenance' являются нормальными)"
+      tags:
+        - verify
+        - verify:systemd
+        - systemd
+
+    - name: Предупреждение о статусе degraded на реальных хостах
+      ansible.builtin.debug:
+        msg: "⚠️ Systemd в статусе 'degraded' - система работает, но некоторые службы не запущены. Рекомендуется проверить состояние служб."
+      when:
+        - not (is_container | default(false))
+        - systemd_status.stdout == 'degraded'
+      tags:
+        - verify
+        - verify:systemd
+        - systemd

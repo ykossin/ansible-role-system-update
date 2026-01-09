@@ -34,7 +34,7 @@ system_security_only: false
 # Включите только если уверены, что автоматические обновления не нарушат работу сервисов
 system_unattended_upgrades: false
 
-# Настройки автоматических обновлений
+# Настройки автоматических обновлений (unattended-upgrades)
 system_unattended_upgrades_config:
   update_package_lists: "1"
   download_upgradeable_packages: "1"
@@ -45,6 +45,10 @@ system_unattended_upgrades_config:
   mail_report: "on-change"
   mail_only_on_error: "false"
   mail_to: ""
+  # Настройки автоматической перезагрузки
+  automatic_reboot: "false"
+  automatic_reboot_with_users: "false"
+  automatic_reboot_time: "03:00"
 
 # Список пакетов для обновления (если пусто - все)
 system_packages_to_update: []
@@ -81,18 +85,3 @@ system_unattended_upgrades_origins: []
 
 # Черный список пакетов для автоматических обновлений
 system_unattended_upgrades_blacklist: []
-
-# Автоматическая перезагрузка для unattended-upgrades
-system_unattended_upgrades_config:
-  update_package_lists: "1"
-  download_upgradeable_packages: "1"
-  autoremove_packages: "1"
-  unattended_upgrade: "1"
-  auto_fix_interrupted_dpkg: "1"
-  minimal_steps: "1"
-  mail_report: "on-change"
-  mail_only_on_error: "false"
-  mail_to: ""
-  automatic_reboot: "false"
-  automatic_reboot_with_users: "false"
-  automatic_reboot_time: "03:00"

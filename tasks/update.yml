@@ -1,0 +1,157 @@
+---
+# Обновление системы
+
+- name: Проверка наличия обновлений
+  apt:
+    update_cache: true
+    cache_valid_time: 3600
+  register: apt_update
+  changed_when: apt_update.cache_updated | default(false)
+  when: system_update_enabled
+  tags:
+    - update
+    - system
+
+- name: Получение списка обновляемых пакетов
+  ansible.builtin.command:
+    cmd: apt list --upgradable
+  register: upgradable_packages
+  changed_when: false
+  when: system_update_enabled
+  tags:
+    - update
+    - system
+    - check
+
+- name: Извлечение количества обновляемых пакетов из вывода
+  ansible.builtin.set_fact:
+    upgradable_count: "{{ (upgradable_packages.stdout_lines | default([]) | select('match', '^[^/]+/') | list | length) }}"
+  when:
+    - system_show_upgrade_info
+    - upgradable_packages is defined
+  tags:
+    - update
+    - system
+    - check
+
+- name: Отображение информации об обновлениях
+  ansible.builtin.debug:
+    msg:
+      - "Доступно обновлений: {{ upgradable_count | default(0) }}"
+      - "Список обновляемых пакетов:"
+      - "{{ upgradable_packages.stdout_lines | default([]) | select('match', '^[^/]+/') | list }}"
+  when:
+    - system_update_enabled
+    - system_show_upgrade_info
+    - upgradable_packages.stdout_lines | default([]) | select('match', '^[^/]+/') | list | length > 0
+  tags:
+    - update
+    - system
+    - check
+
+- name: Обновление всех пакетов
+  block:
+    - name: Обновление всех пакетов
+      apt:
+        name: "*"
+        state: latest
+        update_cache: false
+      register: apt_upgrade
+  rescue:
+    - name: Обработка ошибки обновления
+      debug:
+        msg: "⚠️ Ошибка при обновлении: {{ ansible_failed_result.msg | default('неизвестная ошибка') }}"
+    - name: Попытка исправления сломанных пакетов
+      ansible.builtin.command:
+        cmd: dpkg --configure -a
+      when: system_auto_fix_on_error
+      register: dpkg_fix
+    - name: Повторная попытка обновления после исправления
+      apt:
+        name: "*"
+        state: latest
+        update_cache: false
+      register: apt_upgrade
+      when:
+        - system_auto_fix_on_error
+        - dpkg_fix.rc == 0
+    - name: Финальная ошибка обновления
+      fail:
+        msg: "Не удалось обновить пакеты. Проверьте логи и исправьте проблемы вручную."
+      when:
+        - not system_auto_fix_on_error
+        - apt_upgrade is not defined or apt_upgrade.failed | default(true)
+  when:
+    - system_update_enabled
+    - system_upgrade_packages
+    - system_packages_to_update | length == 0
+  tags:
+    - update
+    - system
+    - upgrade
+
+- name: Обновление конкретных пакетов
+  apt:
+    name: "{{ system_packages_to_update }}"
+    state: latest
+    update_cache: false
+  register: apt_upgrade
+  when:
+    - system_update_enabled
+    - system_upgrade_packages
+    - system_packages_to_update | length > 0
+  tags:
+    - update
+    - system
+    - upgrade
+
+- name: Обновление дистрибутива (dist-upgrade)
+  apt:
+    upgrade: dist
+    update_cache: false
+  register: apt_dist_upgrade
+  when:
+    - system_update_enabled
+    - system_upgrade_distribution
+  tags:
+    - update
+    - system
+    - dist-upgrade
+
+- name: Обновление только безопасности
+  apt:
+    upgrade: safe
+    update_cache: false
+    default_release: "{{ ansible_facts.distribution_release }}-security"
+  register: apt_security_upgrade
+  when:
+    - system_update_enabled
+    - system_security_only
+  tags:
+    - update
+    - system
+    - security
+
+- name: Закрепление пакетов (hold)
+  dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop: "{{ system_hold_packages }}"
+  when:
+    - system_hold_packages | length > 0
+  tags:
+    - update
+    - system
+    - hold
+
+- name: Удаление неиспользуемых пакетов
+  apt:
+    autoremove: true
+    purge: true
+  when:
+    - system_update_enabled
+    - system_autoremove
+  tags:
+    - update
+    - system
+    - autoremove

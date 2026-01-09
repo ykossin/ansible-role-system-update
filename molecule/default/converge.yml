@@ -1,0 +1,56 @@
+---
+# Применение роли system-update для тестирования
+
+- name: Converge
+  hosts: all
+  gather_facts: true
+  become: true
+  vars:
+    # Настройки для тестирования
+    system_update_enabled: true
+    system_upgrade_packages: true
+    system_upgrade_distribution: false
+    system_autoremove: true
+    system_clean_apt_cache: true
+    system_reboot_after_kernel_update: false
+    system_unattended_upgrades: false
+    
+    # Включить проверки для тестирования
+    system_check_repositories: true
+    system_check_distribution_version: true
+    system_min_distribution_version: "11"
+    system_min_free_space_gb: 1
+    system_auto_fix_on_error: true
+    system_log_updates: true
+    system_log_dir: "/var/log/ansible"
+    system_show_upgrade_info: true
+    system_check_package_integrity: true
+
+  roles:
+    - role: ../../..
+      tags:
+        - system-update
+
+  post_tasks:
+    - name: Проверка наличия логов обновления
+      find:
+        paths: "{{ system_log_dir }}"
+        patterns: "system-update-*.log"
+      register: update_logs
+      changed_when: false
+
+    - name: Отображение найденных логов
+      debug:
+        msg: "Найдено логов обновления: {{ update_logs.files | length }}"
+      when: update_logs.files | length > 0
+
+    - name: Проверка статуса apt
+      ansible.builtin.command:
+        cmd: apt-get check
+      register: apt_check
+      changed_when: false
+      failed_when: false
+
+    - name: Отображение статуса apt
+      debug:
+        msg: "APT статус: {{ 'OK' if apt_check.rc == 0 else 'Есть проблемы' }}"
