@@ -1,0 +1,45 @@
+---
+# Подготовка окружения перед применением роли
+# Убеждаемся, что systemd работает и система готова к обновлению
+
+- name: Prepare
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Ожидание запуска systemd
+      wait_for:
+        path: /run/systemd/system
+        timeout: 30
+      register: systemd_ready
+
+    - name: Проверка статуса systemd
+      command: systemctl is-system-running
+      register: systemd_status
+      changed_when: false
+      failed_when: false
+
+    - name: Отображение статуса systemd
+      debug:
+        msg: "Systemd статус: {{ systemd_status.stdout }}"
+
+    - name: Обновление списка пакетов (предварительное)
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Проверка свободного места на диске
+      command: df -BG / | tail -1 | awk '{print $4}' | sed 's/G//'
+      register: free_space
+      changed_when: false
+
+    - name: Отображение свободного места
+      debug:
+        msg: "Свободно места на диске: {{ free_space.stdout }}GB"
+
+    - name: Проверка версии дистрибутива
+      debug:
+        msg:
+          - "Дистрибутив: {{ ansible_distribution }}"
+          - "Версия: {{ ansible_distribution_version }}"
+          - "Кодовое имя: {{ ansible_distribution_release }}"

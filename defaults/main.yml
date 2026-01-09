@@ -1,0 +1,98 @@
+---
+# Переменные по умолчанию для роли system-update
+# Обновлено: январь 2026
+
+# Обновлять систему (true/false)
+system_update_enabled: true
+
+# Обновлять пакеты (true/false)
+system_upgrade_packages: true
+
+# Обновлять дистрибутив (dist-upgrade) - более агрессивно
+system_upgrade_distribution: false
+
+# Удалять неиспользуемые пакеты после обновления
+system_autoremove: true
+
+# Перезагружать после обновления ядра (true/false)
+system_reboot_after_kernel_update: false
+
+# Задержка перед перезагрузкой (секунды)
+system_reboot_delay: 300
+
+# Таймаут перезагрузки (секунды)
+system_reboot_timeout: 600
+
+# Очищать кэш apt после обновления
+system_clean_apt_cache: true
+
+# Обновлять только безопасные обновления (security updates)
+system_security_only: false
+
+# Обновлять автоматически (unattended-upgrades)
+# ВАЖНО: По умолчанию ВЫКЛЮЧЕНО для безопасности
+# Включите только если уверены, что автоматические обновления не нарушат работу сервисов
+system_unattended_upgrades: false
+
+# Настройки автоматических обновлений
+system_unattended_upgrades_config:
+  update_package_lists: "1"
+  download_upgradeable_packages: "1"
+  autoremove_packages: "1"
+  unattended_upgrade: "1"
+  auto_fix_interrupted_dpkg: "1"
+  minimal_steps: "1"
+  mail_report: "on-change"
+  mail_only_on_error: "false"
+  mail_to: ""
+
+# Список пакетов для обновления (если пусто - все)
+system_packages_to_update: []
+
+# Пропускать определенные пакеты
+system_hold_packages: []
+
+# Проверка свободного места на диске (GB)
+system_min_free_space_gb: 2
+
+# Проверка доступности репозиториев перед обновлением
+system_check_repositories: true
+
+# Автоматическое исправление ошибок при обновлении
+system_auto_fix_on_error: true
+
+# Проверка версии дистрибутива
+system_check_distribution_version: true
+system_min_distribution_version: "11"  # Debian 11 / Ubuntu 20.04
+
+# Логирование результатов обновления
+system_log_updates: true
+system_log_dir: "/var/log/ansible"
+
+# Показывать информацию об обновлениях (количество, размер)
+system_show_upgrade_info: true
+
+# Проверка целостности пакетов после обновления
+system_check_package_integrity: true
+
+# Источники для автоматических обновлений (unattended-upgrades)
+# Будет заполнено динамически в tasks на основе дистрибутива
+system_unattended_upgrades_origins: []
+
+# Черный список пакетов для автоматических обновлений
+system_unattended_upgrades_blacklist: []
+
+# Автоматическая перезагрузка для unattended-upgrades
+system_unattended_upgrades_config:
+  update_package_lists: "1"
+  download_upgradeable_packages: "1"
+  autoremove_packages: "1"
+  unattended_upgrade: "1"
+  auto_fix_interrupted_dpkg: "1"
+  minimal_steps: "1"
+  mail_report: "on-change"
+  mail_only_on_error: "false"
+  mail_to: ""
+  automatic_reboot: "false"
+  automatic_reboot_with_users: "false"
+  automatic_reboot_time: "03:00"

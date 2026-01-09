@@ -1,0 +1,28 @@
+---
+galaxy_info:
+  author: y.kossin
+  role_name: system-update
+  namespace: ykossin
+  description: Роль для обновления операционной системы Debian/Ubuntu
+  license: ISC
+  min_ansible_version: "2.9"
+  platforms:
+    - name: Debian
+      versions:
+        - bookworm
+        - bullseye
+        - trixie
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+        - noble
+  galaxy_tags:
+    - system
+    - update
+    - upgrade
+    - apt
+    - debian
+    - ubuntu
+
+dependencies: []

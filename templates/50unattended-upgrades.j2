@@ -1,0 +1,47 @@
+// Настройки автоматических обновлений
+// Сгенерировано Ansible ролью system-update
+// Дата: {{ ansible_date_time.iso8601 }}
+
+// Обновлять списки пакетов
+Unattended-Upgrade::Update-Package-Lists "{{ system_unattended_upgrades_config.update_package_lists }}";
+
+// Скачивать обновляемые пакеты
+Unattended-Upgrade::Download-Upgradeable-Packages "{{ system_unattended_upgrades_config.download_upgradeable_packages }}";
+
+// Автоматическая перезагрузка
+Unattended-Upgrade::Automatic-Reboot "{{ system_unattended_upgrades_config.automatic_reboot | default('false') }}";
+Unattended-Upgrade::Automatic-Reboot-WithUsers "{{ system_unattended_upgrades_config.automatic_reboot_with_users | default('false') }}";
+Unattended-Upgrade::Automatic-Reboot-Time "{{ system_unattended_upgrades_config.automatic_reboot_time | default('03:00') }}";
+
+// Удаление неиспользуемых пакетов
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "{{ system_unattended_upgrades_config.autoremove_packages }}";
+Unattended-Upgrade::Remove-Unused-Dependencies "{{ system_unattended_upgrades_config.autoremove_packages }}";
+
+// Исправление прерванных установок
+Unattended-Upgrade::AutoFixInterruptedDpkg "{{ system_unattended_upgrades_config.auto_fix_interrupted_dpkg }}";
+
+// Минимальные шаги
+Unattended-Upgrade::MinimalSteps "{{ system_unattended_upgrades_config.minimal_steps }}";
+
+// Email уведомления
+{% if system_unattended_upgrades_config.mail_to | length > 0 %}
+Unattended-Upgrade::Mail "{{ system_unattended_upgrades_config.mail_to }}";
+Unattended-Upgrade::MailReport "{{ system_unattended_upgrades_config.mail_report }}";
+Unattended-Upgrade::MailOnlyOnError {{ system_unattended_upgrades_config.mail_only_on_error }};
+{% else %}
+// Email уведомления отключены
+{% endif %}
+
+// Источники обновлений
+Unattended-Upgrade::Origins-Pattern {
+{% for origin in system_unattended_upgrades_origins | default([]) %}
+    "{{ origin }}";
+{% endfor %}
+};
+
+// Черный список пакетов (не обновлять автоматически)
+Unattended-Upgrade::Package-Blacklist {
+{% for package in system_unattended_upgrades_blacklist | default([]) %}
+    "{{ package }}";
+{% endfor %}
+};

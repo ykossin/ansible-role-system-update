@@ -1,0 +1,49 @@
+---
+# Requirements для Molecule тестов
+# Можно использовать локальные роли, GitLab репозитории или Galaxy
+
+# Текущая роль (system-update) используется локально, не нужно указывать
+
+# Примеры использования других источников:
+
+# ============================================
+# ВАРИАНТ 1: Локальные роли из каталога
+# ============================================
+# - src: ../../firewall
+#   name: firewall
+#   scm: local
+#
+# - src: ../../fail2ban
+#   name: fail2ban
+#   scm: local
+#
+# - src: ../../libvirt-kvm
+#   name: libvirt-kvm
+#   scm: local
+
+# ============================================
+# ВАРИАНТ 2: Роль из GitLab репозитория (публичный)
+# ============================================
+# - src: git+https://gitlab.com/your-group/ansible-role-firewall.git
+#   name: firewall
+#   version: main  # или master, или тег v1.0.0
+
+# ============================================
+# ВАРИАНТ 3: Роль из GitLab репозитория (приватный с токеном)
+# ============================================
+# - src: git+https://oauth2:{{ lookup('env', 'GITLAB_TOKEN') }}@gitlab.com/your-group/ansible-role-firewall.git
+#   name: firewall
+#   version: main
+#
+# Использование:
+# export GITLAB_TOKEN=your_token_here
+# molecule test
+
+# ============================================
+# ВАРИАНТ 4: Роль из Ansible Galaxy
+# ============================================
+# - name: geerlingguy.docker
+#   version: 7.0.0
+#
+# - name: geerlingguy.security
+#   version: 2.0.0

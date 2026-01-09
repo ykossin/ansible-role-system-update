@@ -1,0 +1,162 @@
+---
+# Тесты для проверки работы роли system-update
+
+- name: Verify
+  hosts: all
+  gather_facts: true
+  become: true
+  tasks:
+    - name: Проверка версии дистрибутива
+      assert:
+        that:
+          - ansible_distribution in ['Debian', 'Ubuntu']
+          - ansible_distribution_version is defined
+        fail_msg: "Неподдерживаемый дистрибутив"
+        success_msg: "Дистрибутив поддерживается: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+
+    - name: Проверка наличия Python3
+      command: python3 --version
+      register: python_version
+      changed_when: false
+
+    - name: Отображение версии Python
+      debug:
+        msg: "Python версия: {{ python_version.stdout }}"
+
+    - name: Проверка наличия apt
+      command: apt --version
+      register: apt_version
+      changed_when: false
+
+    - name: Отображение версии apt
+      debug:
+        msg: "APT версия: {{ apt_version.stdout_lines[0] }}"
+
+    - name: Проверка свободного места на диске
+      command: df -BG / | tail -1 | awk '{print $4}' | sed 's/G//'
+      register: free_space_gb
+      changed_when: false
+
+    - name: Проверка достаточности свободного места
+      assert:
+        that:
+          - (free_space_gb.stdout | int) >= 1
+        fail_msg: "Недостаточно свободного места: {{ free_space_gb.stdout }}GB"
+        success_msg: "Достаточно свободного места: {{ free_space_gb.stdout }}GB"
+
+    - name: Проверка целостности пакетов
+      command: dpkg --audit
+      register: dpkg_audit
+      changed_when: false
+      failed_when: false
+
+    - name: Проверка отсутствия проблем с пакетами
+      assert:
+        that:
+          - dpkg_audit.rc == 0
+        fail_msg: "Обнаружены проблемы с пакетами: {{ dpkg_audit.stdout }}"
+        success_msg: "Проблем с пакетами не обнаружено"
+
+    - name: Проверка зависимостей apt
+      command: apt-get check
+      register: apt_check
+      changed_when: false
+      failed_when: false
+
+    - name: Проверка отсутствия проблем с зависимостями
+      assert:
+        that:
+          - apt_check.rc == 0
+        fail_msg: "Обнаружены проблемы с зависимостями: {{ apt_check.stderr }}"
+        success_msg: "Проблем с зависимостями не обнаружено"
+
+    - name: Проверка наличия директории для логов
+      stat:
+        path: "{{ system_log_dir | default('/var/log/ansible') }}"
+      register: log_dir
+
+    - name: Проверка создания директории для логов
+      assert:
+        that:
+          - log_dir.stat.exists
+          - log_dir.stat.isdir
+        fail_msg: "Директория для логов не создана"
+        success_msg: "Директория для логов создана: {{ log_dir.stat.path }}"
+
+    - name: Проверка наличия логов обновления
+      find:
+        paths: "{{ system_log_dir | default('/var/log/ansible') }}"
+        patterns: "system-update-*.log"
+      register: update_logs
+
+    - name: Проверка создания логов
+      assert:
+        that:
+          - update_logs.files | length > 0
+        fail_msg: "Логи обновления не созданы"
+        success_msg: "Логи обновления созданы: {{ update_logs.files | length }} файл(ов)"
+
+    - name: Проверка содержимого лога обновления
+      slurp:
+        src: "{{ update_logs.files[0].path }}"
+      register: log_content
+      when: update_logs.files | length > 0
+
+    - name: Проверка наличия информации в логе
+      assert:
+        that:
+          - log_content.content | b64decode | length > 0
+        fail_msg: "Лог обновления пуст"
+        success_msg: "Лог обновления содержит информацию"
+      when: update_logs.files | length > 0
+
+    - name: Проверка доступности репозиториев
+      uri:
+        url: "{{ item }}"
+        method: HEAD
+        status_code: [200, 301, 302, 403]
+        timeout: 10
+      loop:
+        - "http://deb.debian.org/debian/"
+        - "http://security.debian.org/"
+      register: repo_check
+      failed_when: false
+      changed_when: false
+      when: ansible_distribution == "Debian"
+
+    - name: Проверка доступности репозиториев Ubuntu
+      uri:
+        url: "{{ item }}"
+        method: HEAD
+        status_code: [200, 301, 302, 403]
+        timeout: 10
+      loop:
+        - "http://archive.ubuntu.com/ubuntu/"
+        - "http://security.ubuntu.com/ubuntu/"
+      register: repo_check_ubuntu
+      failed_when: false
+      changed_when: false
+      when: ansible_distribution == "Ubuntu"
+
+    - name: Проверка обновления списка пакетов
+      command: apt list --upgradable 2>/dev/null | grep -v "Listing..." | wc -l
+      register: upgradable_count
+      changed_when: false
+      failed_when: false
+
+    - name: Отображение количества обновляемых пакетов
+      debug:
+        msg: "Доступно обновлений: {{ upgradable_count.stdout }}"
+
+    - name: Проверка работы systemd
+      command: systemctl is-system-running
+      register: systemd_status
+      changed_when: false
+      failed_when: false
+
+    - name: Проверка статуса systemd
+      assert:
+        that:
+          - systemd_status.rc == 0
+        fail_msg: "Systemd не работает: {{ systemd_status.stdout }}"
+        success_msg: "Systemd работает: {{ systemd_status.stdout }}"
